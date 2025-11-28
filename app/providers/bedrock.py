@@ -1,7 +1,7 @@
 import boto3
 import json
 from typing import List, Dict, Any
-from llm_provider import LLMProvider
+from .base import LLMProvider
 
 class BedrockProvider(LLMProvider):
     def __init__(self, region_name: str = "us-east-1"):

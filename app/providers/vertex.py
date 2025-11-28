@@ -2,7 +2,7 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 import json
 from typing import List, Dict, Any
-from llm_provider import LLMProvider
+from .base import LLMProvider
 import os
 
 class VertexProvider(LLMProvider):
