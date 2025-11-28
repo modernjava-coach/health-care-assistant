@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import Optional
+from ..models import SOAPNote, MedicalCodeResponse
 
 class LLMProvider(ABC):
     """
@@ -7,28 +8,33 @@ class LLMProvider(ABC):
     """
 
     @abstractmethod
-    def generate_soap_note(self, text: str) -> str:
+    def generate_soap_note(self, text: str, patient_id: Optional[str] = None, 
+                          provider_id: Optional[str] = None) -> SOAPNote:
         """
         Generates a SOAP note from the given text.
         
         Args:
             text (str): Raw patient notes or transcript.
+            patient_id (Optional[str]): Patient identifier.
+            provider_id (Optional[str]): Provider identifier.
             
         Returns:
-            str: The generated SOAP note.
+            SOAPNote: The generated SOAP note as a domain model object.
         """
         pass
 
     @abstractmethod
-    def generate_medical_codes(self, text: str) -> List[Dict[str, Any]]:
+    def generate_medical_codes(self, text: str, patient_id: Optional[str] = None,
+                              encounter_id: Optional[str] = None) -> MedicalCodeResponse:
         """
         Extracts medical codes (ICD-10, CPT) from the given text.
         
         Args:
             text (str): Clinical text.
+            patient_id (Optional[str]): Patient identifier.
+            encounter_id (Optional[str]): Encounter identifier.
             
         Returns:
-            List[Dict[str, Any]]: A list of dictionaries representing the codes.
-            Example: [{"code": "R51", "description": "Headache", "type": "ICD-10"}]
+            MedicalCodeResponse: Response containing ICD-10 and CPT codes as domain model objects.
         """
         pass
