@@ -15,10 +15,18 @@ from ..models import (
 )
 
 class BedrockProvider(LLMProvider):
-    def __init__(self, region_name: str = "us-east-1"):
-        self.client = boto3.client("bedrock-runtime", region_name=region_name)
-        self.model_id = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    def __init__(self, region_name: Optional[str] = None, model_id: Optional[str] = None):
+        from ..core.config import settings
+        self.region_name = region_name or settings.AWS_REGION
+        self.model_id = model_id or settings.BEDROCK_MODEL_ID
+        self.client = boto3.client("bedrock-runtime", region_name=self.region_name)
         self.provider_name = "aws"
+
+    def _invoke_model(self, system_prompt: str, user_message: str) -> str:
+        if "anthropic" in self.model_id.lower():
+            return self._invoke_claude(system_prompt, user_message)
+        else:
+            return self._invoke_openai_style(system_prompt, user_message)
 
     def _invoke_claude(self, system_prompt: str, user_message: str) -> str:
         payload = {
@@ -33,14 +41,54 @@ class BedrockProvider(LLMProvider):
             ],
             "temperature": 0.0
         }
+        return self._call_bedrock(payload)
 
-        response = self.client.invoke_model(
-            modelId=self.model_id,
-            body=json.dumps(payload)
-        )
+    def _invoke_openai_style(self, system_prompt: str, user_message: str) -> str:
+        # OpenAI/GPT models on Bedrock typically use the standard chat completion format
+        # but the specific payload structure for Bedrock's "InvokeModel" might vary slightly
+        # depending on the specific model family. 
+        # For OpenAI models on Bedrock (via custom models or marketplace), 
+        # we assume standard OpenAI chat format.
+        
+        payload = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ],
+            "max_tokens": 4096,
+            "temperature": 0.0
+        }
+        return self._call_bedrock(payload)
 
-        response_body = json.loads(response.get("body").read())
-        return response_body["content"][0]["text"]
+    def _call_bedrock(self, payload: dict) -> str:
+        try:
+            response = self.client.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(payload)
+            )
+            response_body = json.loads(response.get("body").read())
+            
+            # Handle different response formats
+            if "content" in response_body and isinstance(response_body["content"], list):
+                # Anthropic format: content[0].text
+                return response_body["content"][0]["text"]
+            elif "choices" in response_body:
+                # OpenAI format: choices[0].message.content
+                return response_body["choices"][0]["message"]["content"]
+            else:
+                # Fallback or error
+                print(f"Unknown response format: {response_body.keys()}")
+                return str(response_body)
+                
+        except Exception as e:
+            print(f"Error invoking Bedrock model {self.model_id}: {e}")
+            raise
 
     def generate_soap_note(self, text: str, patient_id: Optional[str] = None, 
                           provider_id: Optional[str] = None) -> SOAPNote:
@@ -55,7 +103,7 @@ class BedrockProvider(LLMProvider):
         
         Do not include markdown formatting. Return only the JSON object."""
         
-        response_text = self._invoke_claude(system_prompt, text)
+        response_text = self._invoke_model(system_prompt, text)
         
         # Clean and parse JSON
         cleaned_text = response_text.strip()
@@ -137,7 +185,7 @@ class BedrockProvider(LLMProvider):
         
         Do not include markdown. Return only JSON."""
         
-        response_text = self._invoke_claude(system_prompt, text)
+        response_text = self._invoke_model(system_prompt, text)
         
         # Clean and parse JSON
         cleaned_text = response_text.strip()
