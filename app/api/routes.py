@@ -1,4 +1,5 @@
-from fastapi import HTTPException, Query, APIRouter
+from fastapi import HTTPException, Query, APIRouter, UploadFile, File, Form
+from typing import Optional
 from ..services.llm_service import LLMService
 from ..models import (
     SOAPNoteRequest,
@@ -20,13 +21,6 @@ async def generate_soap_note(
 ):
     """
     Generate a SOAP note from raw patient notes or transcripts.
-    
-    Args:
-        request: SOAPNoteRequest containing the text and optional metadata
-        provider: AI provider to use (aws or google)
-    
-    Returns:
-        SOAPNoteResponse with the generated SOAP note
     """
     try:
         soap_note = llm_service.generate_soap_note(
@@ -43,6 +37,32 @@ async def generate_soap_note(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/generate-soap-upload", response_model=SOAPNoteResponse)
+async def generate_soap_note_upload(
+    file: UploadFile = File(...),
+    patient_id: Optional[str] = Form(None),
+    provider_id: Optional[str] = Form(None),
+    provider: str = Query("aws", description="Provider to use")
+):
+    """
+    Generate a SOAP note from an uploaded file (Image or PDF).
+    """
+    try:
+        content = await file.read()
+        soap_note = llm_service.generate_soap_note_from_file(
+            file_content=content,
+            content_type=file.content_type,
+            patient_id=patient_id,
+            provider_id=provider_id
+        )
+        
+        return SOAPNoteResponse(
+            soap_note=soap_note,
+            provider=provider
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/generate-codes", response_model=MedicalCodeResponse)
 async def generate_medical_codes(
     request: MedicalCodeRequest, 
@@ -50,13 +70,6 @@ async def generate_medical_codes(
 ):
     """
     Extract medical codes (ICD-10 and CPT) from clinical text.
-    
-    Args:
-        request: MedicalCodeRequest containing the text and options
-        provider: AI provider to use (aws or google)
-    
-    Returns:
-        MedicalCodeResponse with ICD-10 and CPT codes
     """
     try:
         codes_response = llm_service.generate_medical_codes(
@@ -69,3 +82,27 @@ async def generate_medical_codes(
         return codes_response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate-codes-upload", response_model=MedicalCodeResponse)
+async def generate_medical_codes_upload(
+    file: UploadFile = File(...),
+    patient_id: Optional[str] = Form(None),
+    encounter_id: Optional[str] = Form(None),
+    provider: str = Query("aws", description="Provider to use")
+):
+    """
+    Extract medical codes from an uploaded file (Image or PDF).
+    """
+    try:
+        content = await file.read()
+        codes_response = llm_service.generate_medical_codes_from_file(
+            file_content=content,
+            content_type=file.content_type,
+            patient_id=patient_id,
+            encounter_id=encounter_id
+        )
+        
+        return codes_response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

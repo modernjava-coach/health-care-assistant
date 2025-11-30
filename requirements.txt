@@ -4,3 +4,10 @@ boto3
 google-cloud-aiplatform
 pydantic
 python-dotenv
+
+langchain
+langchain-aws
+langchain-community
+python-multipart
+pypdf
+pillow
