@@ -18,6 +18,7 @@ def get_medical_code_chain(model_id: str = None, region_name: str = None):
     llm = ChatBedrock(
         model_id=model_id,
         region_name=region_name,
+        credentials_profile_name="default",
         model_kwargs={"temperature": 0.0}
     )
     

@@ -8,13 +8,20 @@ from PIL import Image, ImageDraw
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set dummy credentials to pass ChatBedrock validation
-os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.main import app
-from app.models import SOAPNote
+# Wrap imports in a context manager to provide dummy credentials ONLY during import
+# this satisfies ChatBedrock validation without polluting the environment for other tests
+with patch.dict(os.environ, {
+    "AWS_ACCESS_KEY_ID": "testing",
+    "AWS_SECRET_ACCESS_KEY": "testing", 
+    "AWS_DEFAULT_REGION": "us-east-1"
+}):
+    from app.main import app
+    from app.models import SOAPNote
+    # Import the actual service instance used by the API
+    from app.api.routes import llm_service
 
 def create_dummy_medical_image():
     """Create a simple image with medical text."""
@@ -35,15 +42,15 @@ def test_image_upload_endpoint():
     print("Testing /generate-soap-upload with Image...")
 
     # Mock the services
-    with patch('app.services.llm_service.OCRService') as MockOCR, \
-         patch('app.services.llm_service.get_soap_note_chain') as MockSoapChain:
+    # We must patch the INSTANCE because it's already initialized in app.api.routes
+    with patch.object(llm_service, 'ocr_service') as mock_ocr_service, \
+         patch.object(llm_service, 'soap_chain') as mock_soap_chain:
         
         # Setup OCR Mock
-        mock_ocr = MockOCR.return_value
-        mock_ocr.extract_text.return_value = "Patient: Jane Doe\nSubjective: C/O Migraine"
+        mock_ocr_service.extract_text.return_value = "Patient: Jane Doe\nSubjective: C/O Migraine"
         
         # Setup LLM Mock
-        mock_chain = MockSoapChain.return_value
+        # The chain invoke method
         mock_response = SOAPNote(
             subjective="Patient reports migraine",
             objective="None recorded",
@@ -52,7 +59,7 @@ def test_image_upload_endpoint():
             generated_by_ai=True,
             ai_provider="aws"
         )
-        mock_chain.invoke.return_value = mock_response
+        mock_soap_chain.invoke.return_value = mock_response
 
         # Create Test Client
         client = TestClient(app)
